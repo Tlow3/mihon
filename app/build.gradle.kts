@@ -79,6 +79,9 @@ android {
 
             signingConfig = debug.signingConfig
 
+            // Lets the fork's builds install beside official Mihon, e.g. -PappIdSuffix=.fork
+            providers.gradleProperty("appIdSuffix").orNull?.let { applicationIdSuffix = it }
+
             isProfileable = true
 
             proguardFiles("proguard-android-optimize.txt", "proguard-rules.pro")
