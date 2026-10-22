@@ -37,6 +37,7 @@ import eu.kanade.domain.track.interactor.TrackChapter
 import eu.kanade.domain.track.model.AutoTrackState
 import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.presentation.manga.DownloadAction
+import eu.kanade.presentation.manga.components.AnilistScores
 import eu.kanade.presentation.manga.components.ChapterDownloadAction
 import eu.kanade.presentation.util.formattedMessage
 import eu.kanade.tachiyomi.data.cache.CoverCache
@@ -53,6 +54,7 @@ import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -66,6 +68,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
@@ -104,6 +107,7 @@ import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.domain.manga.model.applyFilter
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
+import tachiyomi.domain.track.model.Track
 import tachiyomi.i18n.MR
 import tachiyomi.source.local.isLocal
 import kotlin.math.floor
@@ -254,18 +258,67 @@ class MangaViewModel(
         .distinctUntilChanged()
         .onStart { emit(0 to false) }
 
+    // The user's AniList scoring format is checked once per screen, since it can be changed on AniList at any time
+    private var anilistFormatChecked = false
+
+    // AniList's scores for an entry linked to it. The community average comes over the network, so the user's own
+    // score is shown first and the average follows.
+    private val anilistScores = getTracks.subscribe(mangaId)
+        .map { tracks -> tracks.firstOrNull { it.trackerId == trackerManager.aniList.id } }
+        .distinctUntilChanged { old, new -> old?.remoteId == new?.remoteId && old?.score == new?.score }
+        .flatMapLatest { track -> anilistScoresFor(track) }
+        .catch {
+            logcat(LogPriority.ERROR, it)
+            emit(null)
+        }
+        .onStart { emit(null) }
+
+    private fun anilistScoresFor(track: Track?): Flow<AnilistScores?> = flow {
+        val anilist = trackerManager.aniList
+        if (track == null || !anilist.isLoggedIn) {
+            emit(null)
+            return@flow
+        }
+        fun userScore() = track.score.takeIf { it > 0 }?.let { anilist.formatScore(it, precise = false) }
+
+        emit(AnilistScores(community = null, user = userScore()))
+
+        if (!anilistFormatChecked) {
+            try {
+                anilist.refreshScoreFormat()
+                anilistFormatChecked = true
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                logcat(LogPriority.WARN, e) { "AniList: couldn't refresh scoring format" }
+            }
+        }
+        val community = try {
+            anilist.getCommunityScore(track.remoteId)
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            logcat(LogPriority.WARN, e) { "AniList: couldn't get community score" }
+            null
+        }
+        emit(
+            AnilistScores(
+                community = community?.let { anilist.formatScore(it, precise = true) },
+                user = userScore(),
+            ),
+        )
+    }
+
     val state: StateFlow<State> = combine(
         mangaAndChapters,
         scanlators,
         trackers,
         combine(selectedChapterIds, queuedDownloadStates.pausedWhileUnsubscribed(), ::Pair),
-        combine(dialog, isRefreshingData, ::Pair),
+        combine(dialog, isRefreshingData, anilistScores, ::Triple),
     ) {
             mangaAndChapters,
             (availableScanlators, excludedScanlators, rating),
             (trackingCount, hasLoggedInTrackers),
             (selectedIds, downloads),
-            (dialog, isRefreshingData),
+            (dialog, isRefreshingData, anilistScores),
         ->
         State.Success(
             manga = mangaAndChapters.manga,
@@ -283,6 +336,7 @@ class MangaViewModel(
             availableScanlators = availableScanlators,
             excludedScanlators = excludedScanlators,
             rating = rating,
+            anilistScores = anilistScores,
             trackingCount = trackingCount,
             hasLoggedInTrackers = hasLoggedInTrackers,
             isRefreshingData = isRefreshingData,
@@ -1119,6 +1173,7 @@ class MangaViewModel(
             val availableScanlators: Set<String>,
             val excludedScanlators: Set<String>,
             val rating: Int? = null,
+            val anilistScores: AnilistScores? = null,
             val trackingCount: Int = 0,
             val hasLoggedInTrackers: Boolean = false,
             val isRefreshingData: Boolean = false,

@@ -842,6 +842,9 @@
     <string name="manga_rating_title">Your rating</string>
     <string name="manga_rating_value">%1$d/10</string>
     <string name="manga_rating_clear">Clear rating</string>
+    <string name="anilist_community">Community</string>
+    <string name="anilist_you">You</string>
+    <string name="anilist_not_scored">Not scored</string>
 
     <!-- Tracking Screen -->
     <string name="manga_tracking_tab">Tracking</string>

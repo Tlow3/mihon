@@ -46,6 +46,7 @@ import androidx.compose.ui.util.fastAll
 import androidx.compose.ui.util.fastAny
 import androidx.compose.ui.util.fastMap
 import eu.kanade.presentation.components.relativeDateText
+import eu.kanade.presentation.manga.components.AnilistScoresRow
 import eu.kanade.presentation.manga.components.ChapterDownloadAction
 import eu.kanade.presentation.manga.components.ChapterHeader
 import eu.kanade.presentation.manga.components.ExpandableMangaDescription
@@ -404,6 +405,12 @@ private fun MangaScreenSmallImpl(
                         )
                     }
 
+                    state.anilistScores?.let { scores ->
+                        item(key = "anilist_scores") {
+                            AnilistScoresRow(scores = scores, onClick = onTrackingClicked)
+                        }
+                    }
+
                     item(
                         key = MangaScreenItem.DESCRIPTION_WITH_TAG,
                         contentType = MangaScreenItem.DESCRIPTION_WITH_TAG,
@@ -623,6 +630,9 @@ fun MangaScreenLargeImpl(
                             onEditIntervalClicked = onEditIntervalClicked,
                             onEditCategory = onEditCategoryClicked,
                         )
+                        state.anilistScores?.let { scores ->
+                            AnilistScoresRow(scores = scores, onClick = onTrackingClicked)
+                        }
                         ExpandableMangaDescription(
                             defaultExpandState = true,
                             description = state.manga.description,
