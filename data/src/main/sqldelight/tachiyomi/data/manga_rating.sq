@@ -24,3 +24,16 @@ getRatingsByMangaIds:
 SELECT manga_id, rating
 FROM manga_rating
 WHERE manga_id IN :mangaIds;
+
+-- Rated entries outside the library, so backups keep their ratings even when nothing in them was read
+getRatedMangaNotInLibrary:
+SELECT
+    M.id, M.source_id, M.remote_url, M.remote_title, M.remote_author, M.remote_artist, M.remote_description,
+    M.remote_genre, M.remote_status, M.remote_cover, M.remote_update_strategy, M.remote_memo,
+    M.user_favorite_at, M.user_notes, M.user_reader_flags, M.user_chapter_flags,
+    M.state_chapter_last_update, M.state_chapter_next_update, M.state_chapter_fetch_interval,
+    M.state_cover_last_modified, M.state_initialized
+FROM manga M
+JOIN manga_rating R
+ON R.manga_id = M.id
+WHERE M.user_favorite_at IS NULL;

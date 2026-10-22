@@ -237,7 +237,8 @@ class MangaViewModel(
         )
     }
 
-    private val scanlators = combine(
+    // Grouped only to fit the state combine below, which takes five flows
+    private val scanlatorsAndRating = combine(
         getAvailableScanlators.subscribe(mangaId).distinctUntilChanged(),
         getExcludedScanlators.subscribe(mangaId).distinctUntilChanged(),
         getMangaRating.subscribe(mangaId).distinctUntilChanged(),
@@ -259,9 +260,6 @@ class MangaViewModel(
         }
         .distinctUntilChanged()
         .onStart { emit(0 to false) }
-
-    // The user's AniList scoring format is checked once per screen, since it can be changed on AniList at any time
-    private var anilistFormatChecked = false
 
     // AniList's scores for an entry linked to it. The community average comes over the network, so the user's own
     // score is shown first and the average follows.
@@ -302,9 +300,13 @@ class MangaViewModel(
         format.set(formats[(formats.indexOf(format.get()) + 1) % formats.size])
     }
 
-    private fun realAnilistScores(): Flow<AnilistScores?> = getTracks.subscribe(mangaId)
-        .map { tracks -> tracks.firstOrNull { it.trackerId == trackerManager.aniList.id } }
-        .distinctUntilChanged { old, new -> old?.remoteId == new?.remoteId && old?.score == new?.score }
+    private fun realAnilistScores(): Flow<AnilistScores?> = combine(
+        getTracks.subscribe(mangaId)
+            .map { tracks -> tracks.firstOrNull { it.trackerId == trackerManager.aniList.id } }
+            .distinctUntilChanged { old, new -> old?.remoteId == new?.remoteId && old?.score == new?.score },
+        // Logging in or out of AniList shows or hides the scores without leaving the screen
+        trackerManager.aniList.isLoggedInFlow.distinctUntilChanged(),
+    ) { track, isLoggedIn -> track.takeIf { isLoggedIn } }
         .flatMapLatest { track -> anilistScoresFor(track) }
         .catch {
             logcat(LogPriority.ERROR, it)
@@ -314,7 +316,7 @@ class MangaViewModel(
 
     private fun anilistScoresFor(track: Track?): Flow<AnilistScores?> = flow {
         val anilist = trackerManager.aniList
-        if (track == null || !anilist.isLoggedIn) {
+        if (track == null) {
             emit(null)
             return@flow
         }
@@ -322,14 +324,11 @@ class MangaViewModel(
 
         emit(AnilistScores(community = null, user = userScore()))
 
-        if (!anilistFormatChecked) {
-            try {
-                anilist.refreshScoreFormat()
-                anilistFormatChecked = true
-            } catch (e: Exception) {
-                if (e is CancellationException) throw e
-                logcat(LogPriority.WARN, e) { "AniList: couldn't refresh scoring format" }
-            }
+        try {
+            anilist.refreshScoreFormat()
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            logcat(LogPriority.WARN, e) { "AniList: couldn't refresh scoring format" }
         }
         val community = try {
             anilist.getCommunityScore(track.remoteId)
@@ -348,7 +347,7 @@ class MangaViewModel(
 
     val state: StateFlow<State> = combine(
         mangaAndChapters,
-        scanlators,
+        scanlatorsAndRating,
         trackers,
         combine(selectedChapterIds, queuedDownloadStates.pausedWhileUnsubscribed(), ::Pair),
         combine(dialog, isRefreshingData, anilistScores, ::Triple),
@@ -1192,7 +1191,8 @@ class MangaViewModel(
 
     /** A null [rating] clears it. */
     fun setRating(rating: Int?) {
-        viewModelScope.launch {
+        // Saved even if the screen closes straight after
+        appScope.launch {
             setMangaRating.await(mangaId, rating)
         }
     }

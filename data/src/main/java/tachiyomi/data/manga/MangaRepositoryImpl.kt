@@ -183,6 +183,12 @@ class MangaRepositoryImpl(
             ?.toInt()
     }
 
+    override suspend fun getRatedMangaNotInLibrary(): List<Manga> {
+        return database.manga_ratingQueries
+            .getRatedMangaNotInLibrary(MangaMapper::mapManga)
+            .awaitAsList()
+    }
+
     override suspend fun getRatingsByMangaIds(mangaIds: List<Long>): Map<Long, Int> {
         return database.manga_ratingQueries
             .getRatingsByMangaIds(mangaIds)

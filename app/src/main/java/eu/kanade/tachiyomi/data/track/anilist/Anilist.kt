@@ -12,6 +12,9 @@ import kotlinx.serialization.json.Json
 import tachiyomi.i18n.MR
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 import tachiyomi.domain.track.model.Track as DomainTrack
 
 class Anilist(id: Long) : BaseTracker(id, "AniList"), DeletableTracker {
@@ -242,8 +245,21 @@ class Anilist(id: Long) : BaseTracker(id, "AniList"), DeletableTracker {
         }
     }
 
-    /** Picks up a scoring format the user changed on AniList since logging in. */
-    suspend fun refreshScoreFormat() = updateUserConfig()
+    // When the scoring format was last read from AniList, so opening several titles in a row costs one request
+    @Volatile
+    private var scoreFormatRefreshedAt: Instant? = null
+
+    /**
+     * Picks up a scoring format the user changed on AniList since logging in. It's read at most every few minutes,
+     * since each request counts against AniList's rate limit, which progress syncing shares.
+     */
+    suspend fun refreshScoreFormat() {
+        val now = Clock.System.now()
+        val last = scoreFormatRefreshedAt
+        if (last != null && now - last < 10.minutes) return
+        updateUserConfig()
+        scoreFormatRefreshedAt = now
+    }
 
     private fun oneDecimal(value: Double) = String.format(Locale.getDefault(), "%.1f", value)
 

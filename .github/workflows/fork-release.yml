@@ -55,7 +55,8 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: fork-r${{ github.run_number }}
+          # The attempt number keeps a re-run from clashing with the tag of the attempt before it
+          TAG: fork-r${{ github.run_number }}-${{ github.run_attempt }}
         run: |
           set -e
           mv app/build/outputs/apk/release/app-universal-release.apk "mihon-fork-$TAG.apk"

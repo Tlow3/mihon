@@ -85,8 +85,14 @@ class BackupCreator(
                 throw IllegalStateException(context.stringResource(MR.strings.create_backup_file_error))
             }
 
-            val nonFavoriteManga = if (options.readEntries) mangaRepository.getReadMangaNotInLibrary() else emptyList()
-            val backupManga = backupMangas(getFavorites.await() + nonFavoriteManga, options)
+            val readNonFavoriteManga = if (options.readEntries) {
+                mangaRepository.getReadMangaNotInLibrary()
+            } else {
+                emptyList()
+            }
+            // Rated entries are kept whatever the options, since the rating exists nowhere else
+            val nonFavoriteManga = readNonFavoriteManga + mangaRepository.getRatedMangaNotInLibrary()
+            val backupManga = backupMangas((getFavorites.await() + nonFavoriteManga).distinctBy { it.id }, options)
 
             file.openOutputStream()
                 .also {

@@ -51,6 +51,8 @@ interface MangaRepository {
 
     suspend fun getRating(mangaId: Long): Int?
 
+    suspend fun getRatedMangaNotInLibrary(): List<Manga>
+
     suspend fun getRatingsByMangaIds(mangaIds: List<Long>): Map<Long, Int>
 
     fun getRatingAsFlow(mangaId: Long): Flow<Int?>
