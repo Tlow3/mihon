@@ -21,6 +21,7 @@ import tachiyomi.data.subscribeToOne
 import tachiyomi.data.subscribeToOneOrNull
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.domain.manga.model.MangaRating
 import tachiyomi.domain.manga.model.MangaRemoteUpdate
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.model.MangaWithChapterCount
@@ -172,6 +173,42 @@ class MangaRepositoryImpl(
             if (toRemove.isNotEmpty()) {
                 database.excluded_scanlatorQueries.remove(mangaId, toRemove)
             }
+        }
+    }
+
+    override suspend fun getRating(mangaId: Long): Int? {
+        return database.manga_ratingQueries
+            .getRatingByMangaId(mangaId)
+            .awaitAsOneOrNull()
+            ?.toInt()
+    }
+
+    override suspend fun getRatedMangaNotInLibrary(): List<Manga> {
+        return database.manga_ratingQueries
+            .getRatedMangaNotInLibrary(MangaMapper::mapManga)
+            .awaitAsList()
+    }
+
+    override suspend fun getRatingsByMangaIds(mangaIds: List<Long>): Map<Long, Int> {
+        return database.manga_ratingQueries
+            .getRatingsByMangaIds(mangaIds)
+            .awaitAsList()
+            .associate { it.manga_id to it.rating.toInt() }
+    }
+
+    override fun getRatingAsFlow(mangaId: Long): Flow<Int?> {
+        return database.manga_ratingQueries
+            .getRatingByMangaId(mangaId)
+            .subscribeToOneOrNull()
+            .map { it?.toInt() }
+    }
+
+    override suspend fun setRating(mangaId: Long, rating: Int?) {
+        if (rating == null) {
+            database.manga_ratingQueries.remove(mangaId)
+        } else {
+            require(rating in MangaRating.RANGE) { "Rating must be within ${MangaRating.RANGE}" }
+            database.manga_ratingQueries.upsert(mangaId, rating.toLong())
         }
     }
 

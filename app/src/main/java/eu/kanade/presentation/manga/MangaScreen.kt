@@ -46,6 +46,7 @@ import androidx.compose.ui.util.fastAll
 import androidx.compose.ui.util.fastAny
 import androidx.compose.ui.util.fastMap
 import eu.kanade.presentation.components.relativeDateText
+import eu.kanade.presentation.manga.components.AnilistScoresRow
 import eu.kanade.presentation.manga.components.ChapterDownloadAction
 import eu.kanade.presentation.manga.components.ChapterHeader
 import eu.kanade.presentation.manga.components.ExpandableMangaDescription
@@ -93,6 +94,8 @@ fun MangaScreen(
     onWebViewClicked: (() -> Unit)?,
     onWebViewLongClicked: (() -> Unit)?,
     onTrackingClicked: () -> Unit,
+    onRatingClicked: () -> Unit,
+    onAnilistScoresLongClick: (() -> Unit)?,
 
     // For tags menu
     onTagSearch: (String) -> Unit,
@@ -149,6 +152,8 @@ fun MangaScreen(
             onWebViewClicked = onWebViewClicked,
             onWebViewLongClicked = onWebViewLongClicked,
             onTrackingClicked = onTrackingClicked,
+            onRatingClicked = onRatingClicked,
+            onAnilistScoresLongClick = onAnilistScoresLongClick,
             onTagSearch = onTagSearch,
             onCopyTagToClipboard = onCopyTagToClipboard,
             onFilterClicked = onFilterButtonClicked,
@@ -186,6 +191,8 @@ fun MangaScreen(
             onWebViewClicked = onWebViewClicked,
             onWebViewLongClicked = onWebViewLongClicked,
             onTrackingClicked = onTrackingClicked,
+            onRatingClicked = onRatingClicked,
+            onAnilistScoresLongClick = onAnilistScoresLongClick,
             onTagSearch = onTagSearch,
             onCopyTagToClipboard = onCopyTagToClipboard,
             onFilterButtonClicked = onFilterButtonClicked,
@@ -226,6 +233,8 @@ private fun MangaScreenSmallImpl(
     onWebViewClicked: (() -> Unit)?,
     onWebViewLongClicked: (() -> Unit)?,
     onTrackingClicked: () -> Unit,
+    onRatingClicked: () -> Unit,
+    onAnilistScoresLongClick: (() -> Unit)?,
 
     // For tags menu
     onTagSearch: (String) -> Unit,
@@ -387,15 +396,27 @@ private fun MangaScreenSmallImpl(
                         MangaActionRow(
                             favorite = state.manga.favorite,
                             trackingCount = state.trackingCount,
+                            rating = state.rating,
                             nextUpdate = nextUpdate,
                             isUserIntervalMode = state.manga.fetchInterval < 0,
                             onAddToLibraryClicked = onAddToLibraryClicked,
                             onWebViewClicked = onWebViewClicked,
                             onWebViewLongClicked = onWebViewLongClicked,
                             onTrackingClicked = onTrackingClicked,
+                            onRatingClicked = onRatingClicked,
                             onEditIntervalClicked = onEditIntervalClicked,
                             onEditCategory = onEditCategoryClicked,
                         )
+                    }
+
+                    state.anilistScores?.let { scores ->
+                        item(key = "anilist_scores") {
+                            AnilistScoresRow(
+                                scores = scores,
+                                onClick = onTrackingClicked,
+                                onLongClick = onAnilistScoresLongClick,
+                            )
+                        }
                     }
 
                     item(
@@ -458,6 +479,8 @@ fun MangaScreenLargeImpl(
     onWebViewClicked: (() -> Unit)?,
     onWebViewLongClicked: (() -> Unit)?,
     onTrackingClicked: () -> Unit,
+    onRatingClicked: () -> Unit,
+    onAnilistScoresLongClick: (() -> Unit)?,
 
     // For tags menu
     onTagSearch: (String) -> Unit,
@@ -605,15 +628,24 @@ fun MangaScreenLargeImpl(
                         MangaActionRow(
                             favorite = state.manga.favorite,
                             trackingCount = state.trackingCount,
+                            rating = state.rating,
                             nextUpdate = nextUpdate,
                             isUserIntervalMode = state.manga.fetchInterval < 0,
                             onAddToLibraryClicked = onAddToLibraryClicked,
                             onWebViewClicked = onWebViewClicked,
                             onWebViewLongClicked = onWebViewLongClicked,
                             onTrackingClicked = onTrackingClicked,
+                            onRatingClicked = onRatingClicked,
                             onEditIntervalClicked = onEditIntervalClicked,
                             onEditCategory = onEditCategoryClicked,
                         )
+                        state.anilistScores?.let { scores ->
+                            AnilistScoresRow(
+                                scores = scores,
+                                onClick = onTrackingClicked,
+                                onLongClick = onAnilistScoresLongClick,
+                            )
+                        }
                         ExpandableMangaDescription(
                             defaultExpandState = true,
                             description = state.manga.description,

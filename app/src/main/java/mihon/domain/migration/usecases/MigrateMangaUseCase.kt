@@ -1,6 +1,8 @@
 package mihon.domain.migration.usecases
 
 import dev.zacsweers.metro.Inject
+import eu.kanade.domain.manga.interactor.GetMangaRating
+import eu.kanade.domain.manga.interactor.SetMangaRating
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.domain.manga.model.hasCustomCover
 import eu.kanade.domain.source.service.SourcePreferences
@@ -40,6 +42,8 @@ class MigrateMangaUseCase(
     private val setMangaCategories: SetMangaCategories,
     private val getTracks: GetTracks,
     private val upsertTrack: UpsertTrack,
+    private val getMangaRating: GetMangaRating,
+    private val setMangaRating: SetMangaRating,
     private val coverCache: CoverCache,
     private val updateMangaFromRemote: UpdateMangaFromRemote,
 ) {
@@ -86,6 +90,11 @@ class MigrateMangaUseCase(
             if (MigrationFlag.CATEGORY in flags) {
                 val categoryIds = getCategories.await(current.id).map { it.id }
                 setMangaCategories.await(target.id, categoryIds)
+            }
+
+            // Carry the personal rating over, unless the target already has its own
+            getMangaRating.await(current.id)?.let { rating ->
+                if (getMangaRating.await(target.id) == null) setMangaRating.await(target.id, rating)
             }
 
             // Update track

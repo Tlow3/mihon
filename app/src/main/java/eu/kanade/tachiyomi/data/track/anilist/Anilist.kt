@@ -10,6 +10,11 @@ import eu.kanade.tachiyomi.data.track.anilist.dto.ALOAuth
 import eu.kanade.tachiyomi.data.track.model.TrackSearch
 import kotlinx.serialization.json.Json
 import tachiyomi.i18n.MR
+import java.util.Locale
+import kotlin.math.roundToInt
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 import tachiyomi.domain.track.model.Track as DomainTrack
 
 class Anilist(id: Long) : BaseTracker(id, "AniList"), DeletableTracker {
@@ -213,6 +218,50 @@ class Anilist(id: Long) : BaseTracker(id, "AniList"), DeletableTracker {
         track.total_chapters = remoteTrack.total_chapters
         return track
     }
+
+    /**
+     * AniList's community average for an entry, out of 100, or null when it has none yet.
+     */
+    suspend fun getCommunityScore(remoteId: Long): Double? {
+        return api.getMangaDetails(remoteId.toInt())?.score?.takeIf { it > 0 }
+    }
+
+    /**
+     * Writes a score out of 100 in the user's current AniList scoring format, with its scale.
+     * [precise] keeps a decimal, for averages that fall between the steps the user can pick.
+     */
+    fun formatScore(score: Double, precise: Boolean): String {
+        return when (scorePreference.get()) {
+            POINT_100 -> "${score.roundToInt()}/100"
+            POINT_10 -> if (precise) "${oneDecimal(score / 10)}/10" else "${score.toInt() / 10}/10"
+            POINT_10_DECIMAL -> "${oneDecimal(score / 10)}/10"
+            POINT_5 -> if (precise) "${oneDecimal(score / 20)}/5 ★" else "${((score + 10) / 20).toInt()}/5 ★"
+            POINT_3 -> when {
+                score <= 35 -> "😦"
+                score <= 60 -> "😐"
+                else -> "😊"
+            }
+            else -> "${score.roundToInt()}/100"
+        }
+    }
+
+    // When the scoring format was last read from AniList, so opening several titles in a row costs one request
+    @Volatile
+    private var scoreFormatRefreshedAt: Instant? = null
+
+    /**
+     * Picks up a scoring format the user changed on AniList since logging in. It's read at most every few minutes,
+     * since each request counts against AniList's rate limit, which progress syncing shares.
+     */
+    suspend fun refreshScoreFormat() {
+        val now = Clock.System.now()
+        val last = scoreFormatRefreshedAt
+        if (last != null && now - last < 10.minutes) return
+        updateUserConfig()
+        scoreFormatRefreshedAt = now
+    }
+
+    private fun oneDecimal(value: Double) = String.format(Locale.getDefault(), "%.1f", value)
 
     override suspend fun updateUserConfig() {
         val currentUser = api.getCurrentUser()

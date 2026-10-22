@@ -200,7 +200,9 @@ AND (
         WHERE chapter.manga_id = manga.id
         AND (user_read = 1 OR user_last_page_read != 0)
     )
-);
+)
+-- A rated entry is kept, since deleting it would take the user's rating with it
+AND NOT EXISTS (SELECT 1 FROM manga_rating WHERE manga_rating.manga_id = manga.id);
 
 insertReturningId:
 INSERT INTO manga(

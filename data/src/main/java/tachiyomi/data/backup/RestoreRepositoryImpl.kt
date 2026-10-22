@@ -17,6 +17,7 @@ import tachiyomi.domain.backup.repository.RestoreRepository
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.repository.ChapterRepository
 import tachiyomi.domain.manga.model.Manga
+import tachiyomi.domain.manga.model.MangaRating
 import tachiyomi.domain.manga.model.MangaUpdate
 import tachiyomi.domain.manga.repository.MangaRepository
 import tachiyomi.domain.track.model.Track
@@ -67,6 +68,7 @@ class RestoreRepositoryImpl(
         restoreTracking(manga, entry.tracks)
         restoreHistory(manga, entry.history)
         restoreExcludedScanlators(manga, entry.excludedScanlators)
+        restoreRating(manga, entry.rating)
         return manga
     }
 
@@ -297,5 +299,11 @@ class RestoreRepositoryImpl(
 
     private suspend fun restoreExcludedScanlators(manga: Manga, excludedScanlators: List<String>) {
         excludedScanlators.forEach { database.excluded_scanlatorQueries.insert(manga.id, it) }
+    }
+
+    // A backup without a rating leaves the one already on the device alone
+    private suspend fun restoreRating(manga: Manga, rating: Int?) {
+        if (rating == null || rating !in MangaRating.RANGE) return
+        database.manga_ratingQueries.upsert(manga.id, rating.toLong())
     }
 }

@@ -25,7 +25,9 @@ import eu.kanade.core.util.insertSeparators
 import eu.kanade.domain.chapter.interactor.GetAvailableScanlators
 import eu.kanade.domain.chapter.interactor.SetReadStatus
 import eu.kanade.domain.manga.interactor.GetExcludedScanlators
+import eu.kanade.domain.manga.interactor.GetMangaRating
 import eu.kanade.domain.manga.interactor.SetExcludedScanlators
+import eu.kanade.domain.manga.interactor.SetMangaRating
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.domain.manga.model.chaptersFiltered
 import eu.kanade.domain.manga.model.downloadedFilter
@@ -35,14 +37,17 @@ import eu.kanade.domain.track.interactor.TrackChapter
 import eu.kanade.domain.track.model.AutoTrackState
 import eu.kanade.domain.track.service.TrackPreferences
 import eu.kanade.presentation.manga.DownloadAction
+import eu.kanade.presentation.manga.components.AnilistScores
 import eu.kanade.presentation.manga.components.ChapterDownloadAction
 import eu.kanade.presentation.util.formattedMessage
+import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.data.track.EnhancedTracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
+import eu.kanade.tachiyomi.data.track.anilist.Anilist
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.util.chapter.getNextUnread
@@ -51,6 +56,7 @@ import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -64,6 +70,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
@@ -102,6 +109,7 @@ import tachiyomi.domain.manga.model.MangaWithChapterCount
 import tachiyomi.domain.manga.model.applyFilter
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracks
+import tachiyomi.domain.track.model.Track
 import tachiyomi.i18n.MR
 import tachiyomi.source.local.isLocal
 import kotlin.math.floor
@@ -114,7 +122,7 @@ class MangaViewModel(
     @AppCoroutineScope private val appScope: CoroutineScope,
     private val context: Context,
     private val libraryPreferences: LibraryPreferences,
-    trackPreferences: TrackPreferences,
+    private val trackPreferences: TrackPreferences,
     readerPreferences: ReaderPreferences,
     private val trackerManager: TrackerManager,
     private val trackChapter: TrackChapter,
@@ -125,6 +133,8 @@ class MangaViewModel(
     private val getAvailableScanlators: GetAvailableScanlators,
     private val getExcludedScanlators: GetExcludedScanlators,
     private val setExcludedScanlators: SetExcludedScanlators,
+    private val getMangaRating: GetMangaRating,
+    private val setMangaRating: SetMangaRating,
     private val setMangaChapterFlags: SetMangaChapterFlags,
     private val setMangaDefaultChapterFlags: SetMangaDefaultChapterFlags,
     private val setReadStatus: SetReadStatus,
@@ -227,10 +237,12 @@ class MangaViewModel(
         )
     }
 
-    private val scanlators = combine(
+    // Grouped only to fit the state combine below, which takes five flows
+    private val scanlatorsAndRating = combine(
         getAvailableScanlators.subscribe(mangaId).distinctUntilChanged(),
         getExcludedScanlators.subscribe(mangaId).distinctUntilChanged(),
-        ::Pair,
+        getMangaRating.subscribe(mangaId).distinctUntilChanged(),
+        ::Triple,
     )
 
     private val trackers = flow { emit(sourceManager.getOrStub(getMangaAndChapters.awaitManga(mangaId).source)) }
@@ -249,18 +261,102 @@ class MangaViewModel(
         .distinctUntilChanged()
         .onStart { emit(0 to false) }
 
+    // AniList's scores for an entry linked to it. The community average comes over the network, so the user's own
+    // score is shown first and the average follows.
+    private val anilistScores = if (BuildConfig.FAKE_ANILIST_SCORES) fakeAnilistScores() else realAnilistScores()
+
+    /**
+     * Made-up scores for test builds, so the AniList strip can be checked without an AniList account. They follow the
+     * scoring format preference, which [cycleFakeAnilistScoreFormat] steps through.
+     */
+    private fun fakeAnilistScores(): Flow<AnilistScores?> {
+        val format = trackPreferences.anilistScoreType
+        return format.changes()
+            .onStart { emit(format.get()) }
+            .distinctUntilChanged()
+            .map {
+                val anilist = trackerManager.aniList
+                // Fixed per entry, so a title shows the same scores every time it's opened
+                val community = 50.0 + (mangaId * 37 % 45)
+                val user = if (mangaId % 3 == 0L) null else 40.0 + (mangaId * 53 % 61)
+                AnilistScores(
+                    community = anilist.formatScore(community, precise = true),
+                    user = user?.let { anilist.formatScore(it, precise = false) },
+                    isTestData = true,
+                )
+            }
+    }
+
+    fun cycleFakeAnilistScoreFormat() {
+        if (!BuildConfig.FAKE_ANILIST_SCORES) return
+        val formats = listOf(
+            Anilist.POINT_10,
+            Anilist.POINT_10_DECIMAL,
+            Anilist.POINT_100,
+            Anilist.POINT_5,
+            Anilist.POINT_3,
+        )
+        val format = trackPreferences.anilistScoreType
+        format.set(formats[(formats.indexOf(format.get()) + 1) % formats.size])
+    }
+
+    private fun realAnilistScores(): Flow<AnilistScores?> = combine(
+        getTracks.subscribe(mangaId)
+            .map { tracks -> tracks.firstOrNull { it.trackerId == trackerManager.aniList.id } }
+            .distinctUntilChanged { old, new -> old?.remoteId == new?.remoteId && old?.score == new?.score },
+        // Logging in or out of AniList shows or hides the scores without leaving the screen
+        trackerManager.aniList.isLoggedInFlow.distinctUntilChanged(),
+    ) { track, isLoggedIn -> track.takeIf { isLoggedIn } }
+        .flatMapLatest { track -> anilistScoresFor(track) }
+        .catch {
+            logcat(LogPriority.ERROR, it)
+            emit(null)
+        }
+        .onStart { emit(null) }
+
+    private fun anilistScoresFor(track: Track?): Flow<AnilistScores?> = flow {
+        val anilist = trackerManager.aniList
+        if (track == null) {
+            emit(null)
+            return@flow
+        }
+        fun userScore() = track.score.takeIf { it > 0 }?.let { anilist.formatScore(it, precise = false) }
+
+        emit(AnilistScores(community = null, user = userScore()))
+
+        try {
+            anilist.refreshScoreFormat()
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            logcat(LogPriority.WARN, e) { "AniList: couldn't refresh scoring format" }
+        }
+        val community = try {
+            anilist.getCommunityScore(track.remoteId)
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            logcat(LogPriority.WARN, e) { "AniList: couldn't get community score" }
+            null
+        }
+        emit(
+            AnilistScores(
+                community = community?.let { anilist.formatScore(it, precise = true) },
+                user = userScore(),
+            ),
+        )
+    }
+
     val state: StateFlow<State> = combine(
         mangaAndChapters,
-        scanlators,
+        scanlatorsAndRating,
         trackers,
         combine(selectedChapterIds, queuedDownloadStates.pausedWhileUnsubscribed(), ::Pair),
-        combine(dialog, isRefreshingData, ::Pair),
+        combine(dialog, isRefreshingData, anilistScores, ::Triple),
     ) {
             mangaAndChapters,
-            (availableScanlators, excludedScanlators),
+            (availableScanlators, excludedScanlators, rating),
             (trackingCount, hasLoggedInTrackers),
             (selectedIds, downloads),
-            (dialog, isRefreshingData),
+            (dialog, isRefreshingData, anilistScores),
         ->
         State.Success(
             manga = mangaAndChapters.manga,
@@ -277,6 +373,8 @@ class MangaViewModel(
             },
             availableScanlators = availableScanlators,
             excludedScanlators = excludedScanlators,
+            rating = rating,
+            anilistScores = anilistScores,
             trackingCount = trackingCount,
             hasLoggedInTrackers = hasLoggedInTrackers,
             isRefreshingData = isRefreshingData,
@@ -1091,6 +1189,14 @@ class MangaViewModel(
         }
     }
 
+    /** A null [rating] clears it. */
+    fun setRating(rating: Int?) {
+        // Saved even if the screen closes straight after
+        appScope.launch {
+            setMangaRating.await(mangaId, rating)
+        }
+    }
+
     private data class MangaAndChapters(val manga: Manga, val source: Source, val chapters: List<ChapterList.Item>)
 
     sealed interface State {
@@ -1105,6 +1211,8 @@ class MangaViewModel(
             val chapters: List<ChapterList.Item>,
             val availableScanlators: Set<String>,
             val excludedScanlators: Set<String>,
+            val rating: Int? = null,
+            val anilistScores: AnilistScores? = null,
             val trackingCount: Int = 0,
             val hasLoggedInTrackers: Boolean = false,
             val isRefreshingData: Boolean = false,
