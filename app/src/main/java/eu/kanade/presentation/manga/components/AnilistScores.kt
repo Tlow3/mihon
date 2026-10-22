@@ -1,6 +1,6 @@
 package eu.kanade.presentation.manga.components
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -26,12 +26,15 @@ import tachiyomi.presentation.core.i18n.stringResource
 data class AnilistScores(
     val community: String?,
     val user: String?,
+    /** Made up by a test build rather than read from AniList. */
+    val isTestData: Boolean = false,
 )
 
 @Composable
 fun AnilistScoresRow(
     scores: AnilistScores,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
@@ -52,13 +55,16 @@ fun AnilistScoresRow(
         withStyle(SpanStyle(color = strong, fontWeight = FontWeight.SemiBold)) {
             append(scores.user ?: notScored)
         }
+        if (scores.isTestData) {
+            withStyle(SpanStyle(color = MaterialTheme.colorScheme.error)) { append("  ·  test data") }
+        }
     }
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         Text(text = text, style = MaterialTheme.typography.bodyMedium)

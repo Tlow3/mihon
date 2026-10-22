@@ -95,6 +95,7 @@ fun MangaScreen(
     onWebViewLongClicked: (() -> Unit)?,
     onTrackingClicked: () -> Unit,
     onRatingClicked: () -> Unit,
+    onAnilistScoresLongClick: (() -> Unit)?,
 
     // For tags menu
     onTagSearch: (String) -> Unit,
@@ -152,6 +153,7 @@ fun MangaScreen(
             onWebViewLongClicked = onWebViewLongClicked,
             onTrackingClicked = onTrackingClicked,
             onRatingClicked = onRatingClicked,
+            onAnilistScoresLongClick = onAnilistScoresLongClick,
             onTagSearch = onTagSearch,
             onCopyTagToClipboard = onCopyTagToClipboard,
             onFilterClicked = onFilterButtonClicked,
@@ -190,6 +192,7 @@ fun MangaScreen(
             onWebViewLongClicked = onWebViewLongClicked,
             onTrackingClicked = onTrackingClicked,
             onRatingClicked = onRatingClicked,
+            onAnilistScoresLongClick = onAnilistScoresLongClick,
             onTagSearch = onTagSearch,
             onCopyTagToClipboard = onCopyTagToClipboard,
             onFilterButtonClicked = onFilterButtonClicked,
@@ -231,6 +234,7 @@ private fun MangaScreenSmallImpl(
     onWebViewLongClicked: (() -> Unit)?,
     onTrackingClicked: () -> Unit,
     onRatingClicked: () -> Unit,
+    onAnilistScoresLongClick: (() -> Unit)?,
 
     // For tags menu
     onTagSearch: (String) -> Unit,
@@ -407,7 +411,11 @@ private fun MangaScreenSmallImpl(
 
                     state.anilistScores?.let { scores ->
                         item(key = "anilist_scores") {
-                            AnilistScoresRow(scores = scores, onClick = onTrackingClicked)
+                            AnilistScoresRow(
+                                scores = scores,
+                                onClick = onTrackingClicked,
+                                onLongClick = onAnilistScoresLongClick,
+                            )
                         }
                     }
 
@@ -472,6 +480,7 @@ fun MangaScreenLargeImpl(
     onWebViewLongClicked: (() -> Unit)?,
     onTrackingClicked: () -> Unit,
     onRatingClicked: () -> Unit,
+    onAnilistScoresLongClick: (() -> Unit)?,
 
     // For tags menu
     onTagSearch: (String) -> Unit,
@@ -631,7 +640,11 @@ fun MangaScreenLargeImpl(
                             onEditCategory = onEditCategoryClicked,
                         )
                         state.anilistScores?.let { scores ->
-                            AnilistScoresRow(scores = scores, onClick = onTrackingClicked)
+                            AnilistScoresRow(
+                                scores = scores,
+                                onClick = onTrackingClicked,
+                                onLongClick = onAnilistScoresLongClick,
+                            )
                         }
                         ExpandableMangaDescription(
                             defaultExpandState = true,

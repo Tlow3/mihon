@@ -40,12 +40,14 @@ import eu.kanade.presentation.manga.DownloadAction
 import eu.kanade.presentation.manga.components.AnilistScores
 import eu.kanade.presentation.manga.components.ChapterDownloadAction
 import eu.kanade.presentation.util.formattedMessage
+import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.download.model.Download
 import eu.kanade.tachiyomi.data.track.EnhancedTracker
 import eu.kanade.tachiyomi.data.track.TrackerManager
+import eu.kanade.tachiyomi.data.track.anilist.Anilist
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.util.chapter.getNextUnread
@@ -120,7 +122,7 @@ class MangaViewModel(
     @AppCoroutineScope private val appScope: CoroutineScope,
     private val context: Context,
     private val libraryPreferences: LibraryPreferences,
-    trackPreferences: TrackPreferences,
+    private val trackPreferences: TrackPreferences,
     readerPreferences: ReaderPreferences,
     private val trackerManager: TrackerManager,
     private val trackChapter: TrackChapter,
@@ -263,7 +265,44 @@ class MangaViewModel(
 
     // AniList's scores for an entry linked to it. The community average comes over the network, so the user's own
     // score is shown first and the average follows.
-    private val anilistScores = getTracks.subscribe(mangaId)
+    private val anilistScores = if (BuildConfig.FAKE_ANILIST_SCORES) fakeAnilistScores() else realAnilistScores()
+
+    /**
+     * Made-up scores for test builds, so the AniList strip can be checked without an AniList account. They follow the
+     * scoring format preference, which [cycleFakeAnilistScoreFormat] steps through.
+     */
+    private fun fakeAnilistScores(): Flow<AnilistScores?> {
+        val format = trackPreferences.anilistScoreType
+        return format.changes()
+            .onStart { emit(format.get()) }
+            .distinctUntilChanged()
+            .map {
+                val anilist = trackerManager.aniList
+                // Fixed per entry, so a title shows the same scores every time it's opened
+                val community = 50.0 + (mangaId * 37 % 45)
+                val user = if (mangaId % 3 == 0L) null else 40.0 + (mangaId * 53 % 61)
+                AnilistScores(
+                    community = anilist.formatScore(community, precise = true),
+                    user = user?.let { anilist.formatScore(it, precise = false) },
+                    isTestData = true,
+                )
+            }
+    }
+
+    fun cycleFakeAnilistScoreFormat() {
+        if (!BuildConfig.FAKE_ANILIST_SCORES) return
+        val formats = listOf(
+            Anilist.POINT_10,
+            Anilist.POINT_10_DECIMAL,
+            Anilist.POINT_100,
+            Anilist.POINT_5,
+            Anilist.POINT_3,
+        )
+        val format = trackPreferences.anilistScoreType
+        format.set(formats[(formats.indexOf(format.get()) + 1) % formats.size])
+    }
+
+    private fun realAnilistScores(): Flow<AnilistScores?> = getTracks.subscribe(mangaId)
         .map { tracks -> tracks.firstOrNull { it.trackerId == trackerManager.aniList.id } }
         .distinctUntilChanged { old, new -> old?.remoteId == new?.remoteId && old?.score == new?.score }
         .flatMapLatest { track -> anilistScoresFor(track) }

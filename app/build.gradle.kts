@@ -42,6 +42,12 @@ android {
 
         buildConfigField("boolean", "TELEMETRY_INCLUDED", "${Config.includeTelemetry}")
         buildConfigField("boolean", "UPDATER_ENABLED", "${Config.enableUpdater}")
+        // Test builds only (-PfakeAnilistScores): made-up AniList scores on every entry, to check the UI without logging in
+        buildConfigField(
+            "boolean",
+            "FAKE_ANILIST_SCORES",
+            "${providers.gradleProperty("fakeAnilistScores").isPresent}",
+        )
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

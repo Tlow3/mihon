@@ -38,6 +38,7 @@ import eu.kanade.presentation.manga.components.SetIntervalDialog
 import eu.kanade.presentation.util.AssistContentScreen
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
+import eu.kanade.tachiyomi.BuildConfig
 import eu.kanade.tachiyomi.source.Source
 import eu.kanade.tachiyomi.source.isLocalOrStub
 import eu.kanade.tachiyomi.source.online.HttpSource
@@ -149,6 +150,9 @@ class MangaScreen(
                 }
             },
             onRatingClicked = { showRatingDialog = true },
+            onAnilistScoresLongClick = viewModel::cycleFakeAnilistScoreFormat.takeIf {
+                BuildConfig.FAKE_ANILIST_SCORES
+            },
             onTagSearch = { scope.launch { performGenreSearch(navigator, it, viewModel.source!!) } },
             onFilterButtonClicked = viewModel::showSettingsDialog,
             onRefresh = viewModel::fetchAllFromSource,
