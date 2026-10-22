@@ -1,0 +1,6 @@
+CREATE TABLE manga_rating(
+    manga_id INTEGER NOT NULL PRIMARY KEY,
+    rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 10),
+    FOREIGN KEY(manga_id) REFERENCES manga (id)
+    ON DELETE CASCADE
+);

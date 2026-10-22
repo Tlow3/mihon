@@ -49,6 +49,8 @@ class BackupManga(
     @ProtoNumber(111) var initialized: Boolean = false,
     @ProtoNumber(112) var memo: ByteArray = JsonObjectEmptyBytes,
     @ProtoNumber(113) var nextUpdate: Long = 0,
+    // Fork-only values start at 1000 so they never collide with fields Mihon adds later
+    @ProtoNumber(1000) var rating: Int? = null,
 ) {
     fun getMangaImpl(): Manga {
         return Manga.create().copy(

@@ -49,6 +49,17 @@ interface MangaRepository {
 
     suspend fun setExcludedScanlators(mangaId: Long, excludedScanlators: Set<String>)
 
+    suspend fun getRating(mangaId: Long): Int?
+
+    suspend fun getRatingsByMangaIds(mangaIds: List<Long>): Map<Long, Int>
+
+    fun getRatingAsFlow(mangaId: Long): Flow<Int?>
+
+    /**
+     * Saves the user's 1-10 rating of an entry, or clears it when [rating] is null.
+     */
+    suspend fun setRating(mangaId: Long, rating: Int?)
+
     suspend fun update(update: MangaUpdate): Boolean
 
     suspend fun updateRemote(update: MangaRemoteUpdate): Boolean

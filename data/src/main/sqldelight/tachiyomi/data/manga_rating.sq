@@ -1,0 +1,26 @@
+-- The user's own 1-10 rating of an entry, kept apart from `manga` so its many queries stay untouched
+CREATE TABLE manga_rating(
+    manga_id INTEGER NOT NULL PRIMARY KEY,
+    rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 10),
+    FOREIGN KEY(manga_id) REFERENCES manga (id)
+    ON DELETE CASCADE
+);
+
+upsert:
+INSERT INTO manga_rating(manga_id, rating)
+VALUES (:mangaId, :rating)
+ON CONFLICT(manga_id) DO UPDATE SET rating = excluded.rating;
+
+remove:
+DELETE FROM manga_rating
+WHERE manga_id = :mangaId;
+
+getRatingByMangaId:
+SELECT rating
+FROM manga_rating
+WHERE manga_id = :mangaId;
+
+getRatingsByMangaIds:
+SELECT manga_id, rating
+FROM manga_rating
+WHERE manga_id IN :mangaIds;

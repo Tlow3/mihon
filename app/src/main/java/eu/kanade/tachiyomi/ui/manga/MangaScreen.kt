@@ -32,6 +32,7 @@ import eu.kanade.presentation.manga.EditCoverAction
 import eu.kanade.presentation.manga.MangaScreen
 import eu.kanade.presentation.manga.components.DeleteChaptersDialog
 import eu.kanade.presentation.manga.components.MangaCoverDialog
+import eu.kanade.presentation.manga.components.MangaRatingDialog
 import eu.kanade.presentation.manga.components.ScanlatorFilterDialog
 import eu.kanade.presentation.manga.components.SetIntervalDialog
 import eu.kanade.presentation.util.AssistContentScreen
@@ -105,6 +106,8 @@ class MangaScreen(
             }
         }
 
+        var showRatingDialog by remember { mutableStateOf(false) }
+
         MangaScreen(
             state = successState,
             snackbarHostState = viewModel.snackbarHostState,
@@ -145,6 +148,7 @@ class MangaScreen(
                     viewModel.showTrackDialog()
                 }
             },
+            onRatingClicked = { showRatingDialog = true },
             onTagSearch = { scope.launch { performGenreSearch(navigator, it, viewModel.source!!) } },
             onFilterButtonClicked = viewModel::showSettingsDialog,
             onRefresh = viewModel::fetchAllFromSource,
@@ -295,6 +299,14 @@ class MangaScreen(
                 excludedScanlators = successState.excludedScanlators,
                 onDismissRequest = { showScanlatorsDialog = false },
                 onConfirm = viewModel::setExcludedScanlators,
+            )
+        }
+
+        if (showRatingDialog) {
+            MangaRatingDialog(
+                rating = successState.rating,
+                onDismissRequest = { showRatingDialog = false },
+                onConfirm = viewModel::setRating,
             )
         }
     }

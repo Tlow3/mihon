@@ -25,7 +25,9 @@ import eu.kanade.core.util.insertSeparators
 import eu.kanade.domain.chapter.interactor.GetAvailableScanlators
 import eu.kanade.domain.chapter.interactor.SetReadStatus
 import eu.kanade.domain.manga.interactor.GetExcludedScanlators
+import eu.kanade.domain.manga.interactor.GetMangaRating
 import eu.kanade.domain.manga.interactor.SetExcludedScanlators
+import eu.kanade.domain.manga.interactor.SetMangaRating
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.domain.manga.model.chaptersFiltered
 import eu.kanade.domain.manga.model.downloadedFilter
@@ -125,6 +127,8 @@ class MangaViewModel(
     private val getAvailableScanlators: GetAvailableScanlators,
     private val getExcludedScanlators: GetExcludedScanlators,
     private val setExcludedScanlators: SetExcludedScanlators,
+    private val getMangaRating: GetMangaRating,
+    private val setMangaRating: SetMangaRating,
     private val setMangaChapterFlags: SetMangaChapterFlags,
     private val setMangaDefaultChapterFlags: SetMangaDefaultChapterFlags,
     private val setReadStatus: SetReadStatus,
@@ -230,7 +234,8 @@ class MangaViewModel(
     private val scanlators = combine(
         getAvailableScanlators.subscribe(mangaId).distinctUntilChanged(),
         getExcludedScanlators.subscribe(mangaId).distinctUntilChanged(),
-        ::Pair,
+        getMangaRating.subscribe(mangaId).distinctUntilChanged(),
+        ::Triple,
     )
 
     private val trackers = flow { emit(sourceManager.getOrStub(getMangaAndChapters.awaitManga(mangaId).source)) }
@@ -257,7 +262,7 @@ class MangaViewModel(
         combine(dialog, isRefreshingData, ::Pair),
     ) {
             mangaAndChapters,
-            (availableScanlators, excludedScanlators),
+            (availableScanlators, excludedScanlators, rating),
             (trackingCount, hasLoggedInTrackers),
             (selectedIds, downloads),
             (dialog, isRefreshingData),
@@ -277,6 +282,7 @@ class MangaViewModel(
             },
             availableScanlators = availableScanlators,
             excludedScanlators = excludedScanlators,
+            rating = rating,
             trackingCount = trackingCount,
             hasLoggedInTrackers = hasLoggedInTrackers,
             isRefreshingData = isRefreshingData,
@@ -1091,6 +1097,13 @@ class MangaViewModel(
         }
     }
 
+    /** A null [rating] clears it. */
+    fun setRating(rating: Int?) {
+        viewModelScope.launch {
+            setMangaRating.await(mangaId, rating)
+        }
+    }
+
     private data class MangaAndChapters(val manga: Manga, val source: Source, val chapters: List<ChapterList.Item>)
 
     sealed interface State {
@@ -1105,6 +1118,7 @@ class MangaViewModel(
             val chapters: List<ChapterList.Item>,
             val availableScanlators: Set<String>,
             val excludedScanlators: Set<String>,
+            val rating: Int? = null,
             val trackingCount: Int = 0,
             val hasLoggedInTrackers: Boolean = false,
             val isRefreshingData: Boolean = false,
